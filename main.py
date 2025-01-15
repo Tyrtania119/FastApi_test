@@ -2,20 +2,17 @@ from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime, timedelta
+from fastapi.responses import FileResponse
 
 app = FastAPI()
 
 tasks = []
-
 pomodoro_sessions = []
-class Task(BaseModel):
-    "title must exist and have between 3 and 100 chars"
-    title: str = Field(..., min_length=3, max_length=100)
-    "description doesnt have to exist"
-    description: Optional[str] = Field(None, max_length=300)
-    "regex for status"
-    status: str = Field("TODO", pattern="^(TODO|in_progress|done)$")
 
+class Task(BaseModel):
+    title: str = Field(..., min_length=3, max_length=100)
+    description: Optional[str] = Field(None, max_length=300)
+    status: str = Field("TODO", pattern="^(TODO|in_progress|done)$")
 
 class PomodoroSession(BaseModel):
     task_id: int
@@ -23,29 +20,30 @@ class PomodoroSession(BaseModel):
     end_time: datetime
     completed: bool
 
-"POST action, response is JSOn"
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the Task Management API!"}
+
+@app.get("/favicon.ico", include_in_schema=False)
+def get_favicon():
+    return FileResponse("path/to/your/favicon.ico")
+
 @app.post("/tasks", response_model=dict)
 def create_task(task: Task):
-    "check if title is unique"
     if any(t["title"] == task.title for t in tasks):
         raise HTTPException(status_code=400, detail="Task title must be unique.")
 
-    "generate new unique id"
     task_id = len(tasks) + 1
-    "convert Task instance to dict"
     task_data = task.dict()
     task_data["id"] = task_id
     tasks.append(task_data)
     return {"message": "Task created successfully", "task": task_data}
 
-"GET action, returns tasks in dict"
 @app.get("/tasks", response_model=List[dict])
 def get_tasks(status: Optional[str] = Query(None, pattern="^(TODO|in_progress|done)$")):
-    "filter through given status"
     if status:
         return [task for task in tasks if task["status"] == status]
     return tasks
-
 
 @app.get("/tasks/{task_id}", response_model=dict)
 def get_task(task_id: int):
@@ -54,20 +52,17 @@ def get_task(task_id: int):
         raise HTTPException(status_code=404, detail="Task not found.")
     return task
 
-
 @app.put("/tasks/{task_id}", response_model=dict)
 def update_task(task_id: int, updated_task: Task):
     task = next((task for task in tasks if task["id"] == task_id), None)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
 
-    "check if title unique"
     if updated_task.title != task["title"] and any(t["title"] == updated_task.title for t in tasks):
         raise HTTPException(status_code=400, detail="Task title must be unique.")
 
     task.update(updated_task.dict())
     return {"message": "Task updated successfully", "task": task}
-
 
 @app.delete("/tasks/{task_id}", response_model=dict)
 def delete_task(task_id: int):
@@ -78,7 +73,6 @@ def delete_task(task_id: int):
 
     tasks = [t for t in tasks if t["id"] != task_id]
     return {"message": "Task deleted successfully."}
-
 
 @app.post("/pomodoro", response_model=dict)
 def create_pomodoro(task_id: int):
@@ -99,7 +93,6 @@ def create_pomodoro(task_id: int):
     })
     return {"message": "Pomodoro timer created successfully.", "task_id": task_id}
 
-
 @app.post("/pomodoro/{task_id}/stop", response_model=dict)
 def stop_pomodoro(task_id: int):
     session = next(
@@ -110,7 +103,6 @@ def stop_pomodoro(task_id: int):
     session["completed"] = True
     session["end_time"] = datetime.now()
     return {"message": "Pomodoro timer stopped successfully."}
-
 
 @app.get("/pomodoro/stats", response_model=dict)
 def get_pomodoro_stats():
