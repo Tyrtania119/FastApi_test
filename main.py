@@ -3,11 +3,24 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime, timedelta
 from fastapi.responses import FileResponse
+from sqlalchemy import Table, Column, Integer, String, Boolean, MetaData
+from sqlalchemy.sql import text
+from database import engine, metadata
 
 app = FastAPI()
 
 tasks = []
 pomodoro_sessions = []
+metadata.create_all(engine)
+
+tasks_table = Table(
+    "tasks",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("title", String(100)),
+    Column("description", String(300)),
+    Column("status", String(50)),
+)
 
 class Task(BaseModel):
     title: str = Field(..., min_length=3, max_length=100)
